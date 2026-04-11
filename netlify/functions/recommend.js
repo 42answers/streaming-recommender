@@ -106,9 +106,8 @@ exports.handler = async (event) => {
     }
   }
 
+  // Step 4: Batch Claude reviews for top 20 (single API call)
   const top20 = enriched.slice(0, 20);
-
-  // Step 4: Batch Claude reviews (single API call for all 20)
   const reviews = await getBatchClaudeReviews(top20);
   for (const item of top20) {
     item.review_text = reviews[item.title] || null;
@@ -116,9 +115,17 @@ exports.handler = async (event) => {
     delete item.plot;
   }
 
+  // Keep remaining enriched results (without reviews yet) for "load more"
+  const remaining = enriched.slice(20);
+  for (const item of remaining) {
+    item.review_text = null;
+    item.review_source = null;
+    delete item.plot;
+  }
+
   return {
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ results: top20, total_found: allTitles.length }),
+    body: JSON.stringify({ results: enriched, total_found: allTitles.length }),
   };
 };

@@ -456,6 +456,9 @@
 
     <script>
         let mediaType = 'movie';
+        let allResults = [];
+        let shownCount = 0;
+        const PAGE_SIZE = 20;
 
         function setMediaType(type) {
             mediaType = type;
@@ -507,6 +510,95 @@
             });
         }
 
+        const serviceClassMap = {'Netflix': 'netflix', 'Amazon Prime': 'amazon', 'Disney+': 'disney', 'HBO Max': 'hbo', 'Videoland': 'videoland'};
+
+        function renderCard(m, index) {
+            const rtClass = m.rt_score && m.rt_score >= 60 ? 'fresh' : '';
+            const rtBadge = m.rt_score
+                ? `<span class="badge rt ${rtClass}">${m.rt_score}%</span>`
+                : '';
+            const imdbBadge = m.imdb_rating !== 'N/A'
+                ? `<span class="badge imdb">${m.imdb_rating}</span>`
+                : '';
+            const awardsHtml = m.awards && m.awards !== 'N/A'
+                ? `<div class="awards">${m.awards}</div>`
+                : '';
+            const langHtml = m.language
+                ? `<span class="language">${m.language}</span>`
+                : '';
+            const reviewHtml = m.review_text
+                ? `<div class="review"><p>${m.review_text}</p></div>`
+                : '';
+            const streamHtml = m.available_on && m.available_on.length
+                ? `<div class="stream-badges">${m.available_on.map(s => `<span class="stream-badge ${serviceClassMap[s] || ''}">${s}</span>`).join('  ')}</div>`
+                : '';
+
+            return `
+                <div class="movie-card">
+                    <div class="rank">${index + 1}</div>
+                    <div class="poster">
+                        <img src="${m.poster}" alt="${m.title}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="info">
+                        <h3><a href="https://www.imdb.com/title/${m.imdb_id}/" target="_blank">${m.title}</a></h3>
+                        <div class="meta">
+                            <span class="year">${m.year}</span>
+                            ${rtBadge}
+                            ${imdbBadge}
+                            <span class="genres">${m.genres}</span>
+                            ${langHtml}
+                        </div>
+                        ${streamHtml}
+                        ${awardsHtml}
+                        <div class="overview">${m.overview.length > 200 ? m.overview.slice(0, 200).replace(/\s+\S*$/, '') + '...' : m.overview}</div>
+                        ${reviewHtml}
+                    </div>
+                </div>`;
+        }
+
+        async function loadMore() {
+            const btn = document.getElementById('load-more-btn');
+            btn.disabled = true;
+            btn.textContent = 'Loading reviews...';
+
+            const nextBatch = allResults.slice(shownCount, shownCount + PAGE_SIZE);
+
+            // Fetch reviews for this batch
+            try {
+                const resp = await fetch('/api/reviews', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ titles: nextBatch }),
+                });
+                const data = await resp.json();
+                if (data.reviews) {
+                    nextBatch.forEach(m => {
+                        m.review_text = data.reviews[m.title] || null;
+                    });
+                }
+            } catch {}
+
+            // Render cards
+            const container = document.getElementById('cards-container');
+            nextBatch.forEach((m, i) => {
+                container.insertAdjacentHTML('beforeend', renderCard(m, shownCount + i));
+            });
+
+            shownCount += nextBatch.length;
+
+            // Update header
+            document.getElementById('results-count').textContent = `Top ${shownCount}`;
+
+            // Update or remove button
+            if (shownCount >= allResults.length) {
+                btn.remove();
+            } else {
+                btn.disabled = false;
+                const remaining = allResults.length - shownCount;
+                btn.textContent = `Load next ${Math.min(PAGE_SIZE, remaining)}`;
+            }
+        }
+
         async function search() {
             const genre = document.getElementById('genre').value;
             const similarTo = document.getElementById('similar_to').value.trim();
@@ -523,7 +615,7 @@
                 <div class="loading">
                     <div class="spinner"></div>
                     <p>Curating your selection...</p>
-                    <p style="margin-top: 12px; font-size: 0.72rem; color: #333;">Fetching ratings and reviews &middot; 30-60 seconds</p>
+                    <p style="margin-top: 12px; font-size: 0.72rem; color: #555;">Fetching ratings and reviews &middot; 30-60 seconds</p>
                 </div>`;
 
             document.querySelector('.search-btn').disabled = true;
@@ -553,56 +645,29 @@
                     return;
                 }
 
+                allResults = data.results;
+                shownCount = 0;
+
+                const firstBatch = allResults.slice(0, PAGE_SIZE);
+                shownCount = firstBatch.length;
+
                 const foundNote = data.total_found
-                    ? `<span style="font-family: Inter, sans-serif; font-size: 0.75rem; color: #555; font-weight: 300; margin-left: 16px;">${data.total_found} found streaming in NL</span>`
+                    ? `<span style="font-family: Inter, sans-serif; font-size: 0.75rem; color: #777; font-weight: 300; margin-left: 16px;">${data.total_found} found streaming in NL</span>`
                     : '';
-                let html = `<div class="results-header">Top ${data.results.length} ${foundNote}</div>`;
 
-                data.results.forEach((m, i) => {
-                    const rtClass = m.rt_score && m.rt_score >= 60 ? 'fresh' : '';
-                    const rtBadge = m.rt_score
-                        ? `<span class="badge rt ${rtClass}">${m.rt_score}%</span>`
-                        : '';
-                    const imdbBadge = m.imdb_rating !== 'N/A'
-                        ? `<span class="badge imdb">${m.imdb_rating}</span>`
-                        : '';
-                    const awardsHtml = m.awards && m.awards !== 'N/A'
-                        ? `<div class="awards">${m.awards}</div>`
-                        : '';
-                    const langHtml = m.language
-                        ? `<span class="language">${m.language}</span>`
-                        : '';
-                    const reviewHtml = m.review_text
-                        ? `<div class="review"><p>${m.review_text}</p></div>`
-                        : '';
+                let html = `<div class="results-header"><span id="results-count">Top ${shownCount}</span> ${foundNote}</div>`;
+                html += `<div id="cards-container">`;
+                firstBatch.forEach((m, i) => { html += renderCard(m, i); });
+                html += `</div>`;
 
-                    const serviceClassMap = {'Netflix': 'netflix', 'Amazon Prime': 'amazon', 'Disney+': 'disney', 'HBO Max': 'hbo', 'Videoland': 'videoland'};
-                    const streamHtml = m.available_on && m.available_on.length
-                        ? `<div class="stream-badges">${m.available_on.map(s => `<span class="stream-badge ${serviceClassMap[s] || ''}">${s}</span>`).join('  ')}</div>`
-                        : '';
-
-                    html += `
-                        <div class="movie-card">
-                            <div class="rank">${i + 1}</div>
-                            <div class="poster">
-                                <img src="${m.poster}" alt="${m.title}" onerror="this.style.display='none'">
-                            </div>
-                            <div class="info">
-                                <h3><a href="https://www.imdb.com/title/${m.imdb_id}/" target="_blank">${m.title}</a></h3>
-                                <div class="meta">
-                                    <span class="year">${m.year}</span>
-                                    ${rtBadge}
-                                    ${imdbBadge}
-                                    <span class="genres">${m.genres}</span>
-                                    ${langHtml}
-                                </div>
-                                ${streamHtml}
-                                ${awardsHtml}
-                                <div class="overview">${m.overview.length > 200 ? m.overview.slice(0, 200).replace(/\s+\S*$/, '') + '...' : m.overview}</div>
-                                ${reviewHtml}
-                            </div>
-                        </div>`;
-                });
+                if (allResults.length > shownCount) {
+                    const remaining = allResults.length - shownCount;
+                    html += `<div style="text-align: center; padding: 40px 0;">
+                        <button id="load-more-btn" class="search-btn" style="max-width: 300px; margin: 0 auto;" onclick="loadMore()">
+                            Load next ${Math.min(PAGE_SIZE, remaining)}
+                        </button>
+                    </div>`;
+                }
 
                 resultsDiv.innerHTML = html;
             } catch (err) {

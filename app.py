@@ -605,6 +605,15 @@ def genres():
     return jsonify([{"id": k, "name": v} for k, v in sorted(g.items(), key=lambda x: x[1])])
 
 
+@app.route("/api/reviews", methods=["POST"])
+def batch_reviews():
+    """Fetch reviews for a batch of titles (used by 'load more')."""
+    data = request.json
+    titles = data.get("titles", [])
+    reviews = get_batch_claude_reviews(titles)
+    return jsonify({"reviews": reviews})
+
+
 @app.route("/api/recommend", methods=["POST"])
 def recommend():
     data = request.json
@@ -695,16 +704,22 @@ def recommend():
             original_enriched["is_original"] = True
             enriched = [original_enriched] + [e for e in enriched if e["imdb_id"] != original_enriched["imdb_id"]]
 
+    # Step 4: Batch Claude reviews for top 20 (single API call)
     top20 = enriched[:20]
-
-    # Step 4: Batch Claude reviews (single API call for all 20)
     reviews = get_batch_claude_reviews(top20)
     for item in top20:
         item["review_text"] = reviews.get(item["title"])
         item["review_source"] = "AI-generated review" if item["review_text"] else None
-        item.pop("plot", None)  # remove plot from response
+        item.pop("plot", None)
 
-    return jsonify({"results": top20, "total_found": len(all_titles)})
+    # Keep remaining enriched results (without reviews yet) for "load more"
+    remaining = enriched[20:]
+    for item in remaining:
+        item["review_text"] = None
+        item["review_source"] = None
+        item.pop("plot", None)
+
+    return jsonify({"results": enriched, "total_found": len(all_titles)})
 
 
 if __name__ == "__main__":
