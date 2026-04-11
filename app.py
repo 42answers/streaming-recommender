@@ -690,7 +690,7 @@ def recommend():
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
             executor.submit(_enrich_single, t, media_type): t
-            for t in all_titles[:60]  # enrich up to 60, show top 20
+            for t in all_titles  # enrich all candidates
         }
         for future in as_completed(futures):
             result = future.result()

@@ -81,7 +81,7 @@ exports.handler = async (event) => {
   }
 
   // Step 2: Enrich in parallel (enrich up to 60, show top 20)
-  const enrichPromises = allTitles.slice(0, 60).map((t) => enrichSingle(t, mediaType));
+  const enrichPromises = allTitles.map((t) => enrichSingle(t, mediaType));
   const enrichResults = await Promise.allSettled(enrichPromises);
   const enriched = enrichResults
     .filter((r) => r.status === "fulfilled" && r.value)
