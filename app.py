@@ -384,7 +384,7 @@ def discover_titles(genre_id, provider_ids, media_type="movie"):
         base_params["without_genres"] = ANIMATION_GENRE_ID
 
     all_results = []
-    for page in range(1, 4):  # fetch 3 pages = up to 60 results
+    for page in range(1, 6):  # fetch 5 pages = up to 100 results
         params = {**base_params, "page": page}
         data = cached_get(f"{TMDB_BASE}/discover/{media_type}", params)
         results = data.get("results", [])

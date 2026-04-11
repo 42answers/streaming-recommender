@@ -347,7 +347,7 @@ async function discoverTitles(genreId, providerIds, mediaType) {
   }
 
   const allResults = [];
-  for (let page = 1; page <= 3; page++) {
+  for (let page = 1; page <= 5; page++) {
     const data = await tmdbFetch(`/discover/${mediaType}`, { ...baseParams, page });
     const results = data.results || [];
     allResults.push(...results);
