@@ -87,13 +87,31 @@ exports.handler = async (event) => {
     .filter((r) => r.status === "fulfilled" && r.value)
     .map((r) => r.value);
 
-  // Step 3: Sort by RT score, fall back to IMDb rating (scaled to 0-100)
-  function sortScore(x) {
-    if (x.rt_score !== null) return x.rt_score;
-    const imdb = parseFloat(x.imdb_rating);
-    return isNaN(imdb) ? 0 : imdb * 10;
+  // Step 3: Filter out low-quality titles (RT < 70% when RT is available)
+  const filtered = enriched.filter(
+    (e) => e.rt_score === null || e.rt_score >= 70
+  );
+  enriched.length = 0;
+  enriched.push(...filtered);
+
+  // Sort by blended score: RT (40%) + IMDb (40%) + TMDB (20%)
+  function blendedScore(x) {
+    const rt = x.rt_score; // 0-100 or null
+    const imdbRaw = parseFloat(x.imdb_rating);
+    const imdb = isNaN(imdbRaw) ? null : imdbRaw * 10;
+    const tmdb = (x.tmdb_score || 0) * 10;
+
+    const scores = [];
+    const weights = [];
+    if (rt !== null) { scores.push(rt); weights.push(0.4); }
+    if (imdb !== null) { scores.push(imdb); weights.push(0.4); }
+    if (tmdb > 0) { scores.push(tmdb); weights.push(0.2); }
+
+    if (!scores.length) return 0;
+    const totalW = weights.reduce((a, b) => a + b, 0);
+    return scores.reduce((sum, s, i) => sum + s * weights[i], 0) / totalW;
   }
-  enriched.sort((a, b) => sortScore(b) - sortScore(a));
+  enriched.sort((a, b) => blendedScore(b) - blendedScore(a));
 
   // If "similar to" and original title is available, pin it at #1
   if (similarTo && originalTitle) {

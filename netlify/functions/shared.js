@@ -340,7 +340,7 @@ async function discoverTitles(genreId, providerIds, mediaType) {
     with_watch_providers: providerIds.join("|"),
     with_genres: genreId,
     sort_by: "vote_average.desc",
-    "vote_count.gte": 50,
+    "vote_count.gte": mediaType === "movie" ? 300 : 150,
     language: "en-US",
   };
   // Exclude animation and documentary unless specifically selected
@@ -385,20 +385,26 @@ async function discoverSimilar(movieTitle, providerIds, mediaType) {
   if (!process.env.ANTHROPIC_API_KEY) return [];
 
   const kind = mediaType === "movie" ? "movies" : "TV series";
+  const serviceNames = providerIds
+    .map((pid) => PROVIDER_NAMES[pid] || "")
+    .filter(Boolean)
+    .join(", ");
   let suggestions;
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1500,
+      max_tokens: 2000,
       messages: [{
         role: "user",
         content:
-          `List 30 critically acclaimed ${kind} that someone who loved '${movieTitle}' would enjoy. ` +
+          `List 50 critically acclaimed ${kind} that someone who loved '${movieTitle}' would enjoy. ` +
           `Only include titles with strong critical reception (e.g. 70%+ on Rotten Tomatoes, ` +
           `major festival selections, or widely praised by critics). ` +
           `Focus on similar tone, themes, and quality — not just the same genre. ` +
           `Mix well-known and hidden gems. Include recent and classic titles. ` +
+          `The viewer is in the Netherlands and uses ${serviceNames} — ` +
+          `prioritize titles likely available on European streaming platforms. ` +
           `Return ONLY a JSON array of objects with "title" and "year" fields. ` +
           `Example: [{"title": "Example Movie", "year": 2020}]\n` +
           `No explanation, no markdown, just the JSON array.`,
@@ -497,6 +503,7 @@ async function enrichSingle(title, mediaType) {
       overview: title.overview || "",
       rt_score: getRtScore(omdb),
       imdb_rating: omdb.imdbRating || "N/A",
+      tmdb_score: title.vote_average || 0,
       imdb_id: imdbId,
       genres: omdb.Genre || "",
       awards: omdb.Awards || "",

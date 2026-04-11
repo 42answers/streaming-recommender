@@ -378,7 +378,7 @@ def discover_titles(genre_id, provider_ids, media_type="movie"):
         "with_watch_providers": "|".join(str(p) for p in provider_ids),
         "with_genres": genre_id,
         "sort_by": "vote_average.desc",
-        "vote_count.gte": 50,
+        "vote_count.gte": 300 if media_type == "movie" else 150,
         "language": "en-US",
     }
     # Exclude animation and documentary unless specifically selected
@@ -429,19 +429,23 @@ def discover_similar(movie_title, provider_ids, media_type="movie"):
         return []
 
     kind = "movies" if media_type == "movie" else "TV series"
+    service_names = [PROVIDER_NAMES.get(pid, "") for pid in provider_ids]
+    service_hint = ", ".join(n for n in service_names if n)
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=1500,
+            max_tokens=2000,
             messages=[{
                 "role": "user",
                 "content": (
-                    f"List 30 critically acclaimed {kind} that someone who loved '{movie_title}' would enjoy. "
+                    f"List 50 critically acclaimed {kind} that someone who loved '{movie_title}' would enjoy. "
                     f"Only include titles with strong critical reception (e.g. 70%+ on Rotten Tomatoes, "
                     f"major festival selections, or widely praised by critics). "
                     f"Focus on similar tone, themes, and quality — not just the same genre. "
                     f"Mix well-known and hidden gems. Include recent and classic titles. "
+                    f"The viewer is in the Netherlands and uses {service_hint} — "
+                    f"prioritize titles likely available on European streaming platforms. "
                     f"Return ONLY a JSON array of objects with \"title\" and \"year\" fields. "
                     f"Example: [{{\"title\": \"Example Movie\", \"year\": 2020}}]\n"
                     f"No explanation, no markdown, just the JSON array."
@@ -540,6 +544,7 @@ def _enrich_single(title, media_type):
             "overview": title.get("overview", ""),
             "rt_score": get_rt_score(omdb),
             "imdb_rating": omdb.get("imdbRating", "N/A"),
+            "tmdb_score": title.get("vote_average", 0),
             "imdb_id": imdb_id,
             "genres": omdb.get("Genre", ""),
             "awards": omdb.get("Awards", ""),
@@ -557,7 +562,7 @@ def get_batch_claude_reviews(titles):
         return {}
 
     titles_text = "\n".join(
-        f"{i+1}. {t['title']} ({t['year']})"
+        f"{i+1}. {t['title']} ({t['year']}): {t.get('plot', '')[:100]}"
         for i, t in enumerate(titles)
     )
 
@@ -692,17 +697,40 @@ def recommend():
             if result:
                 enriched.append(result)
 
-    # Step 3: Sort by RT score, take top 10
-    # Sort by RT score when available, fall back to IMDb rating (scaled to 0-100)
-    def sort_score(x):
-        if x["rt_score"] is not None:
-            return x["rt_score"]
-        try:
-            return float(x["imdb_rating"]) * 10
-        except (ValueError, TypeError):
-            return 0
+    # Step 3: Filter out low-quality titles (RT < 70% when RT is available)
+    enriched = [
+        e for e in enriched
+        if e["rt_score"] is None or e["rt_score"] >= 70
+    ]
 
-    enriched.sort(key=sort_score, reverse=True)
+    # Sort by blended score: RT (40%) + IMDb (40%) + TMDB (20%)
+    def blended_score(x):
+        rt = x["rt_score"]  # 0-100 scale or None
+        try:
+            imdb = float(x["imdb_rating"]) * 10  # scale to 0-100
+        except (ValueError, TypeError):
+            imdb = None
+        tmdb = float(x.get("tmdb_score", 0)) * 10  # scale to 0-100
+
+        scores = []
+        weights = []
+        if rt is not None:
+            scores.append(rt)
+            weights.append(0.4)
+        if imdb is not None:
+            scores.append(imdb)
+            weights.append(0.4)
+        if tmdb > 0:
+            scores.append(tmdb)
+            weights.append(0.2)
+
+        if not scores:
+            return 0
+        # Normalize weights to sum to 1
+        total_w = sum(weights)
+        return sum(s * w for s, w in zip(scores, weights)) / total_w
+
+    enriched.sort(key=blended_score, reverse=True)
 
     # If "similar to" and original title is available, pin it at #1
     if similar_to and original_title:
