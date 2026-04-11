@@ -80,19 +80,17 @@ exports.handler = async (event) => {
     };
   }
 
-  // Step 2: Enrich in parallel (enrich up to 60, show top 20)
+  // Step 2: Enrich in parallel
   const enrichPromises = allTitles.map((t) => enrichSingle(t, mediaType));
   const enrichResults = await Promise.allSettled(enrichPromises);
-  const enriched = enrichResults
+  let enriched = enrichResults
     .filter((r) => r.status === "fulfilled" && r.value)
     .map((r) => r.value);
 
   // Step 3: Filter out low-quality titles (RT < 70% when RT is available)
-  const filtered = enriched.filter(
+  enriched = enriched.filter(
     (e) => e.rt_score === null || e.rt_score >= 70
   );
-  enriched.length = 0;
-  enriched.push(...filtered);
 
   // Sort by blended score: RT (40%) + IMDb (40%) + TMDB (20%)
   function blendedScore(x) {
@@ -118,9 +116,7 @@ exports.handler = async (event) => {
     const originalEnriched = await enrichSingle(originalTitle, mediaType);
     if (originalEnriched) {
       originalEnriched.is_original = true;
-      const filtered = enriched.filter((e) => e.imdb_id !== originalEnriched.imdb_id);
-      enriched.length = 0;
-      enriched.push(originalEnriched, ...filtered);
+      enriched = [originalEnriched, ...enriched.filter((e) => e.imdb_id !== originalEnriched.imdb_id)];
     }
   }
 

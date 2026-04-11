@@ -7,7 +7,10 @@
   external_node_modules = ["@anthropic-ai/sdk"]
 
 [functions."recommend"]
-  timeout = 60
+  timeout = 90
+
+[functions."reviews"]
+  timeout = 30
 
 [[redirects]]
   from = "/api/*"
