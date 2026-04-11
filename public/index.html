@@ -349,6 +349,18 @@
             margin-bottom: 10px;
         }
 
+        .overview-toggle {
+            color: #777;
+            font-size: 0.75rem;
+            font-weight: 400;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .overview-toggle:hover {
+            color: #bbb;
+        }
+
         .review {
             margin-top: 8px;
         }
@@ -513,6 +525,11 @@
 
         const serviceClassMap = {'Netflix': 'netflix', 'Amazon Prime': 'amazon', 'Disney+': 'disney', 'HBO Max': 'hbo', 'Videoland': 'videoland'};
 
+        function expandOverview(el) {
+            const full = el.getAttribute('data-full');
+            el.parentElement.innerHTML = full;
+        }
+
         function renderCard(m, index) {
             const rtClass = m.rt_score && m.rt_score >= 60 ? 'fresh' : '';
             const rtBadge = m.rt_score
@@ -551,7 +568,9 @@
                         </div>
                         ${streamHtml}
                         ${awardsHtml}
-                        <div class="overview">${m.overview.length > 200 ? m.overview.slice(0, 200).replace(/\s+\S*$/, '') + '...' : m.overview}</div>
+                        <div class="overview">${m.overview.length > 200
+                            ? m.overview.slice(0, 200).replace(/\s+\S*$/, '') + '<span class="overview-toggle" onclick="expandOverview(this)" data-full="' + m.overview.replace(/"/g, '&quot;') + '"> ...more</span>'
+                            : m.overview}</div>
                         ${reviewHtml}
                     </div>
                 </div>`;
