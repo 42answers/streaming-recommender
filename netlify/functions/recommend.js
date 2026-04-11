@@ -87,13 +87,13 @@ exports.handler = async (event) => {
     .filter((r) => r.status === "fulfilled" && r.value)
     .map((r) => r.value);
 
-  // Step 3: Sort by RT score, take top 10
-  enriched.sort((a, b) => {
-    const aHas = a.rt_score !== null ? 1 : 0;
-    const bHas = b.rt_score !== null ? 1 : 0;
-    if (aHas !== bHas) return bHas - aHas;
-    return (b.rt_score || 0) - (a.rt_score || 0);
-  });
+  // Step 3: Sort by RT score, fall back to IMDb rating (scaled to 0-100)
+  function sortScore(x) {
+    if (x.rt_score !== null) return x.rt_score;
+    const imdb = parseFloat(x.imdb_rating);
+    return isNaN(imdb) ? 0 : imdb * 10;
+  }
+  enriched.sort((a, b) => sortScore(b) - sortScore(a));
 
   // If "similar to" and original title is available, pin it at #1
   if (similarTo && originalTitle) {

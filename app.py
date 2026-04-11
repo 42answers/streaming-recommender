@@ -677,10 +677,16 @@ def recommend():
                 enriched.append(result)
 
     # Step 3: Sort by RT score, take top 10
-    enriched.sort(
-        key=lambda x: (x["rt_score"] is not None, x["rt_score"] or 0),
-        reverse=True,
-    )
+    # Sort by RT score when available, fall back to IMDb rating (scaled to 0-100)
+    def sort_score(x):
+        if x["rt_score"] is not None:
+            return x["rt_score"]
+        try:
+            return float(x["imdb_rating"]) * 10
+        except (ValueError, TypeError):
+            return 0
+
+    enriched.sort(key=sort_score, reverse=True)
 
     # If "similar to" and original title is available, pin it at #1
     if similar_to and original_title:
