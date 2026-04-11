@@ -23,7 +23,7 @@ const TMDB_GENRES = {
   80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
   14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
   9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
-  10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
+  53: "Thriller", 10752: "War", 37: "Western",
 };
 
 const TV_GENRES = {
@@ -334,6 +334,7 @@ function getRtScore(omdbData) {
 
 async function discoverTitles(genreId, providerIds, mediaType) {
   const ANIMATION_GENRE_ID = 16;
+  const DOCUMENTARY_GENRE_ID = 99;
   const baseParams = {
     watch_region: "NL",
     with_watch_providers: providerIds.join("|"),
@@ -342,9 +343,11 @@ async function discoverTitles(genreId, providerIds, mediaType) {
     "vote_count.gte": 50,
     language: "en-US",
   };
-  if (String(genreId) !== String(ANIMATION_GENRE_ID)) {
-    baseParams.without_genres = ANIMATION_GENRE_ID;
-  }
+  // Exclude animation and documentary unless specifically selected
+  const exclude = [];
+  if (String(genreId) !== String(ANIMATION_GENRE_ID)) exclude.push(ANIMATION_GENRE_ID);
+  if (String(genreId) !== String(DOCUMENTARY_GENRE_ID)) exclude.push(DOCUMENTARY_GENRE_ID);
+  if (exclude.length) baseParams.without_genres = exclude.join(",");
 
   const allResults = [];
   for (let page = 1; page <= 5; page++) {

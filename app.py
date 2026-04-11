@@ -52,7 +52,7 @@ TMDB_GENRES = {
     80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
     14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
     9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
-    10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
+    53: "Thriller", 10752: "War", 37: "Western",
 }
 
 TV_GENRES = {
@@ -371,6 +371,7 @@ def get_rt_score(omdb_data):
 def discover_titles(genre_id, provider_ids, media_type="movie"):
     """Discover titles across all selected providers, fetching multiple pages."""
     ANIMATION_GENRE_ID = 16
+    DOCUMENTARY_GENRE_ID = 99
     base_params = {
         "api_key": TMDB_API_KEY,
         "watch_region": "NL",
@@ -380,8 +381,14 @@ def discover_titles(genre_id, provider_ids, media_type="movie"):
         "vote_count.gte": 50,
         "language": "en-US",
     }
+    # Exclude animation and documentary unless specifically selected
+    exclude = []
     if genre_id != ANIMATION_GENRE_ID:
-        base_params["without_genres"] = ANIMATION_GENRE_ID
+        exclude.append(str(ANIMATION_GENRE_ID))
+    if genre_id != DOCUMENTARY_GENRE_ID:
+        exclude.append(str(DOCUMENTARY_GENRE_ID))
+    if exclude:
+        base_params["without_genres"] = ",".join(exclude)
 
     all_results = []
     for page in range(1, 6):  # fetch 5 pages = up to 100 results
