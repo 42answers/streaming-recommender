@@ -697,11 +697,18 @@ def recommend():
             if result:
                 enriched.append(result)
 
-    # Step 3: Filter out low-quality titles (RT < 70% when RT is available)
-    enriched = [
-        e for e in enriched
-        if e["rt_score"] is None or e["rt_score"] >= 70
-    ]
+    # Step 3: Quality floor — keep if RT >= 60% OR IMDb >= 6.5 (or no RT data)
+    def passes_quality(e):
+        rt = e["rt_score"]
+        try:
+            imdb = float(e["imdb_rating"])
+        except (ValueError, TypeError):
+            imdb = 0
+        if rt is None:
+            return imdb >= 6.0
+        return rt >= 60 or imdb >= 6.5
+
+    enriched = [e for e in enriched if passes_quality(e)]
 
     # Sort by blended score: RT (40%) + IMDb (40%) + TMDB (20%)
     def blended_score(x):

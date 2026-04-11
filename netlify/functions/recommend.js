@@ -87,10 +87,13 @@ exports.handler = async (event) => {
     .filter((r) => r.status === "fulfilled" && r.value)
     .map((r) => r.value);
 
-  // Step 3: Filter out low-quality titles (RT < 70% when RT is available)
-  enriched = enriched.filter(
-    (e) => e.rt_score === null || e.rt_score >= 70
-  );
+  // Step 3: Quality floor — keep if RT >= 60% OR IMDb >= 6.5 (or no RT: IMDb >= 6.0)
+  enriched = enriched.filter((e) => {
+    const rt = e.rt_score;
+    const imdb = parseFloat(e.imdb_rating) || 0;
+    if (rt === null) return imdb >= 6.0;
+    return rt >= 60 || imdb >= 6.5;
+  });
 
   // Sort by blended score: RT (40%) + IMDb (40%) + TMDB (20%)
   function blendedScore(x) {
