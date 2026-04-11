@@ -340,7 +340,7 @@ async function discoverTitles(genreId, providerIds, mediaType) {
     with_watch_providers: providerIds.join("|"),
     with_genres: genreId,
     sort_by: "vote_average.desc",
-    "vote_count.gte": mediaType === "movie" ? 300 : 150,
+    "vote_count.gte": mediaType === "movie" ? 100 : 50,
     language: "en-US",
   };
   // Exclude animation and documentary unless specifically selected

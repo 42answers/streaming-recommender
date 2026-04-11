@@ -378,7 +378,7 @@ def discover_titles(genre_id, provider_ids, media_type="movie"):
         "with_watch_providers": "|".join(str(p) for p in provider_ids),
         "with_genres": genre_id,
         "sort_by": "vote_average.desc",
-        "vote_count.gte": 300 if media_type == "movie" else 150,
+        "vote_count.gte": 100 if media_type == "movie" else 50,
         "language": "en-US",
     }
     # Exclude animation and documentary unless specifically selected
