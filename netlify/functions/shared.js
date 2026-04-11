@@ -334,20 +334,26 @@ function getRtScore(omdbData) {
 
 async function discoverTitles(genreId, providerIds, mediaType) {
   const ANIMATION_GENRE_ID = 16;
-  const params = {
+  const baseParams = {
     watch_region: "NL",
     with_watch_providers: providerIds.join("|"),
     with_genres: genreId,
     sort_by: "vote_average.desc",
     "vote_count.gte": 50,
     language: "en-US",
-    page: 1,
   };
   if (String(genreId) !== String(ANIMATION_GENRE_ID)) {
-    params.without_genres = ANIMATION_GENRE_ID;
+    baseParams.without_genres = ANIMATION_GENRE_ID;
   }
-  const data = await tmdbFetch(`/discover/${mediaType}`, params);
-  return (data.results || []).slice(0, 30);
+
+  const allResults = [];
+  for (let page = 1; page <= 3; page++) {
+    const data = await tmdbFetch(`/discover/${mediaType}`, { ...baseParams, page });
+    const results = data.results || [];
+    allResults.push(...results);
+    if (results.length < 20) break;
+  }
+  return allResults;
 }
 
 // Check a single Claude suggestion against TMDB + NL streaming (used in parallel)

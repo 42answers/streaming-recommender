@@ -369,9 +369,9 @@ def get_rt_score(omdb_data):
 # ─── Discovery functions ──────────────────────────────────────
 
 def discover_titles(genre_id, provider_ids, media_type="movie"):
-    """Discover titles across all selected providers in a single TMDB call."""
+    """Discover titles across all selected providers, fetching multiple pages."""
     ANIMATION_GENRE_ID = 16
-    params = {
+    base_params = {
         "api_key": TMDB_API_KEY,
         "watch_region": "NL",
         "with_watch_providers": "|".join(str(p) for p in provider_ids),
@@ -379,12 +379,19 @@ def discover_titles(genre_id, provider_ids, media_type="movie"):
         "sort_by": "vote_average.desc",
         "vote_count.gte": 50,
         "language": "en-US",
-        "page": 1,
     }
     if genre_id != ANIMATION_GENRE_ID:
-        params["without_genres"] = ANIMATION_GENRE_ID
-    data = cached_get(f"{TMDB_BASE}/discover/{media_type}", params)
-    return data.get("results", [])[:30]
+        base_params["without_genres"] = ANIMATION_GENRE_ID
+
+    all_results = []
+    for page in range(1, 4):  # fetch 3 pages = up to 60 results
+        params = {**base_params, "page": page}
+        data = cached_get(f"{TMDB_BASE}/discover/{media_type}", params)
+        results = data.get("results", [])
+        all_results.extend(results)
+        if len(results) < 20:  # no more pages
+            break
+    return all_results
 
 
 def _check_title_on_tmdb(suggestion, provider_ids, media_type):
