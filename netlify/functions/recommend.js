@@ -80,12 +80,16 @@ exports.handler = async (event) => {
     };
   }
 
-  // Step 2: Enrich in parallel
-  const enrichPromises = allTitles.map((t) => enrichSingle(t, mediaType));
-  const enrichResults = await Promise.allSettled(enrichPromises);
-  let enriched = enrichResults
-    .filter((r) => r.status === "fulfilled" && r.value)
-    .map((r) => r.value);
+  // Step 2: Enrich in batches of 15 to avoid TMDB/OMDb rate limits
+  let enriched = [];
+  const BATCH_SIZE = 15;
+  for (let i = 0; i < allTitles.length; i += BATCH_SIZE) {
+    const batch = allTitles.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map((t) => enrichSingle(t, mediaType)));
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value) enriched.push(r.value);
+    }
+  }
 
   // Step 3: Quality floor — keep if RT >= 60% OR IMDb >= 6.5 (or no RT: IMDb >= 6.0)
   enriched = enriched.filter((e) => {
