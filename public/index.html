@@ -278,21 +278,29 @@
 
         .meta {
             display: flex;
-            gap: 16px;
+            gap: 14px;
             align-items: center;
             flex-wrap: wrap;
-            margin-bottom: 12px;
-            font-size: 0.8rem;
+            margin-bottom: 10px;
+            font-size: 0.82rem;
         }
 
         .meta .year {
-            color: #555;
-            font-weight: 300;
+            color: #777;
+            font-weight: 400;
         }
 
         .meta .genres {
-            color: #444;
+            color: #666;
             font-weight: 300;
+        }
+
+        .meta .language {
+            color: #556;
+            font-weight: 300;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .badge {
@@ -327,39 +335,29 @@
 
         .awards {
             font-size: 0.78rem;
-            color: #8a7ab5;
+            color: #a899d4;
             margin-bottom: 10px;
             font-weight: 300;
         }
 
         .overview {
-            color: #555;
+            color: #b0b0b0;
             font-size: 0.85rem;
             line-height: 1.7;
             font-weight: 300;
-            margin-bottom: 14px;
+            margin-bottom: 10px;
         }
 
         .review {
-            border-left: 2px solid #1a1a1a;
-            padding: 10px 18px;
-            margin-top: 14px;
+            margin-top: 8px;
         }
 
         .review p {
-            font-size: 0.85rem;
-            color: #888;
+            font-size: 0.8rem;
+            color: #9a8ec2;
             font-style: italic;
-            line-height: 1.6;
+            line-height: 1.5;
             font-weight: 300;
-        }
-
-        .review .source {
-            font-size: 0.7rem;
-            color: #333;
-            font-style: normal;
-            margin-top: 8px;
-            letter-spacing: 0.05em;
         }
 
         /* Loading */
@@ -451,7 +449,7 @@
             </div>
         </div>
 
-        <button class="search-btn" onclick="search()">Find Top 10</button>
+        <button class="search-btn" onclick="search()">Find Top 20</button>
     </div>
 
     <div id="results" class="results"></div>
@@ -555,7 +553,10 @@
                     return;
                 }
 
-                let html = `<div class="results-header">Top ${data.results.length}</div>`;
+                const foundNote = data.total_found
+                    ? `<span style="font-family: Inter, sans-serif; font-size: 0.75rem; color: #555; font-weight: 300; margin-left: 16px;">${data.total_found} found streaming in NL</span>`
+                    : '';
+                let html = `<div class="results-header">Top ${data.results.length} ${foundNote}</div>`;
 
                 data.results.forEach((m, i) => {
                     const rtClass = m.rt_score && m.rt_score >= 60 ? 'fresh' : '';
@@ -568,11 +569,11 @@
                     const awardsHtml = m.awards && m.awards !== 'N/A'
                         ? `<div class="awards">${m.awards}</div>`
                         : '';
+                    const langHtml = m.language
+                        ? `<span class="language">${m.language}</span>`
+                        : '';
                     const reviewHtml = m.review_text
-                        ? `<div class="review">
-                            <p>${m.review_text}</p>
-                            <div class="source">${m.review_source}</div>
-                           </div>`
+                        ? `<div class="review"><p>${m.review_text}</p></div>`
                         : '';
 
                     const serviceClassMap = {'Netflix': 'netflix', 'Amazon Prime': 'amazon', 'Disney+': 'disney', 'HBO Max': 'hbo', 'Videoland': 'videoland'};
@@ -593,10 +594,11 @@
                                     ${rtBadge}
                                     ${imdbBadge}
                                     <span class="genres">${m.genres}</span>
+                                    ${langHtml}
                                 </div>
                                 ${streamHtml}
                                 ${awardsHtml}
-                                <div class="overview">${m.overview}</div>
+                                <div class="overview">${m.overview.length > 200 ? m.overview.slice(0, 200).replace(/\s+\S*$/, '') + '...' : m.overview}</div>
                                 ${reviewHtml}
                             </div>
                         </div>`;

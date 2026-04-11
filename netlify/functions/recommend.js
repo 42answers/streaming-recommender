@@ -1,7 +1,7 @@
 const {
   PROVIDER_IDS, PROVIDER_NAMES,
-  getGenreId, getImdbId, getWatchProviders, getRtScore, omdbFetch,
-  discoverTitles, discoverSimilar, discoverAwardWinners, getClaudeReview,
+  getGenreId, discoverTitles, discoverSimilar, discoverAwardWinners,
+  enrichSingle, getBatchClaudeReviews,
 } = require("./shared");
 
 exports.handler = async (event) => {
@@ -28,8 +28,10 @@ exports.handler = async (event) => {
     };
   }
 
+  // Step 1: Collect candidate titles
   let allTitles = [];
   const seenIds = new Set();
+  let originalTitle = null;
 
   if (award) {
     const titles = await discoverAwardWinners(award, providerIds);
@@ -37,24 +39,38 @@ exports.handler = async (event) => {
       if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
     }
   } else if (similarTo) {
+    // Check if the original title itself is available
+    try {
+      const { tmdbFetch, getWatchProviders } = require("./shared");
+      const searchData = await tmdbFetch(`/search/${mediaType}`, { query: similarTo, language: "en-US" });
+      const searchResults = searchData.results || [];
+      if (searchResults.length) {
+        const candidate = searchResults[0];
+        const providers = await getWatchProviders(candidate.id, mediaType);
+        const providerIdList = providers.map((p) => p.provider_id);
+        if (providerIds.some((pid) => providerIdList.includes(pid))) {
+          originalTitle = candidate;
+          seenIds.add(candidate.id);
+        }
+      }
+    } catch {}
+
     const titles = await discoverSimilar(similarTo, providerIds, mediaType);
     for (const t of titles) {
       if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
     }
   } else if (genre) {
-    for (const pid of providerIds) {
-      const genreId = getGenreId(genre, mediaType);
-      if (!genreId) {
-        return {
-          statusCode: 400,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ error: `Genre '${genre}' not found` }),
-        };
-      }
-      const titles = await discoverTitles(genreId, pid, mediaType);
-      for (const t of titles) {
-        if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
-      }
+    const genreId = getGenreId(genre, mediaType);
+    if (!genreId) {
+      return {
+        statusCode: 400,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ error: `Genre '${genre}' not found` }),
+      };
+    }
+    const titles = await discoverTitles(genreId, providerIds, mediaType);
+    for (const t of titles) {
+      if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
     }
   } else {
     return {
@@ -64,48 +80,14 @@ exports.handler = async (event) => {
     };
   }
 
-  // Enrich with OMDb data
-  const enriched = [];
-  for (const title of allTitles) {
-    try {
-      const imdbId = await getImdbId(title.id, mediaType);
-      if (!imdbId) continue;
+  // Step 2: Enrich in parallel (enrich up to 60, show top 20)
+  const enrichPromises = allTitles.slice(0, 60).map((t) => enrichSingle(t, mediaType));
+  const enrichResults = await Promise.allSettled(enrichPromises);
+  const enriched = enrichResults
+    .filter((r) => r.status === "fulfilled" && r.value)
+    .map((r) => r.value);
 
-      const omdb = await omdbFetch(imdbId);
-      if (omdb.Response === "False") continue;
-
-      const rtScore = getRtScore(omdb);
-      const name = title.title || title.name || "Unknown";
-      const year = (title.release_date || title.first_air_date || "").slice(0, 4);
-
-      const reviewText = await getClaudeReview(name, year, omdb.Plot || "");
-
-      const providers = await getWatchProviders(title.id, mediaType);
-      const availableOn = providers
-        .filter((p) => p.provider_id in PROVIDER_NAMES)
-        .map((p) => PROVIDER_NAMES[p.provider_id]);
-
-      enriched.push({
-        title: name,
-        year,
-        poster: `https://image.tmdb.org/t/p/w300${title.poster_path || ""}`,
-        overview: title.overview || "",
-        rt_score: rtScore,
-        imdb_rating: omdb.imdbRating || "N/A",
-        imdb_id: imdbId,
-        genres: omdb.Genre || "",
-        awards: omdb.Awards || "",
-        review_text: reviewText,
-        review_source: "AI-generated review",
-        available_on: availableOn,
-      });
-    } catch {
-      continue;
-    }
-
-    if (enriched.length >= 15) break;
-  }
-
+  // Step 3: Sort by RT score, take top 10
   enriched.sort((a, b) => {
     const aHas = a.rt_score !== null ? 1 : 0;
     const bHas = b.rt_score !== null ? 1 : 0;
@@ -113,9 +95,30 @@ exports.handler = async (event) => {
     return (b.rt_score || 0) - (a.rt_score || 0);
   });
 
+  // If "similar to" and original title is available, pin it at #1
+  if (similarTo && originalTitle) {
+    const originalEnriched = await enrichSingle(originalTitle, mediaType);
+    if (originalEnriched) {
+      originalEnriched.is_original = true;
+      const filtered = enriched.filter((e) => e.imdb_id !== originalEnriched.imdb_id);
+      enriched.length = 0;
+      enriched.push(originalEnriched, ...filtered);
+    }
+  }
+
+  const top20 = enriched.slice(0, 20);
+
+  // Step 4: Batch Claude reviews (single API call for all 20)
+  const reviews = await getBatchClaudeReviews(top20);
+  for (const item of top20) {
+    item.review_text = reviews[item.title] || null;
+    item.review_source = item.review_text ? "AI-generated review" : null;
+    delete item.plot;
+  }
+
   return {
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ results: enriched.slice(0, 10) }),
+    body: JSON.stringify({ results: top20, total_found: allTitles.length }),
   };
 };
