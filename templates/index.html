@@ -155,6 +155,7 @@
             margin-right: -20px;
             border-radius: 6px;
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .form-group.filter.active-filter {
@@ -424,7 +425,7 @@
 
         <div class="divider">or</div>
 
-        <div class="form-group filter" id="filter-similar">
+        <div class="form-group filter" id="filter-similar" onclick="document.getElementById('similar_to').focus()">
             <label>Similar to</label>
             <input type="text" id="similar_to" placeholder="Inception, Breaking Bad, Parasite..." oninput="activateFilter('similar')">
         </div>
