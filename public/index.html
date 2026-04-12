@@ -576,29 +576,11 @@
                 </div>`;
         }
 
-        async function loadMore() {
+        function loadMore() {
             const btn = document.getElementById('load-more-btn');
-            btn.disabled = true;
-            btn.textContent = 'Loading reviews...';
-
             const nextBatch = allResults.slice(shownCount, shownCount + PAGE_SIZE);
 
-            // Fetch reviews for this batch
-            try {
-                const resp = await fetch('/api/reviews', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ titles: nextBatch }),
-                });
-                const data = await resp.json();
-                if (data.reviews) {
-                    nextBatch.forEach(m => {
-                        m.review_text = data.reviews[m.title] || null;
-                    });
-                }
-            } catch {}
-
-            // Render cards
+            // Reviews are pre-loaded from DB — just render
             const container = document.getElementById('cards-container');
             nextBatch.forEach((m, i) => {
                 container.insertAdjacentHTML('beforeend', renderCard(m, shownCount + i));
@@ -613,7 +595,6 @@
             if (shownCount >= allResults.length) {
                 btn.remove();
             } else {
-                btn.disabled = false;
                 const remaining = allResults.length - shownCount;
                 btn.textContent = `Load next ${Math.min(PAGE_SIZE, remaining)}`;
             }
@@ -635,7 +616,7 @@
                 <div class="loading">
                     <div class="spinner"></div>
                     <p>Curating your selection...</p>
-                    <p style="margin-top: 12px; font-size: 0.72rem; color: #555;">Fetching ratings and reviews &middot; 30-60 seconds</p>
+                    <p style="margin-top: 12px; font-size: 0.72rem; color: #555;">Searching database...</p>
                 </div>`;
 
             document.querySelector('.search-btn').disabled = true;

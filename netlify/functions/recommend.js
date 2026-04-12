@@ -1,7 +1,8 @@
 const {
-  PROVIDER_IDS, PROVIDER_NAMES,
-  getGenreId, discoverTitles, discoverSimilar, discoverAwardWinners,
-  enrichSingle, getBatchClaudeReviews,
+  PROVIDER_IDS,
+  getGenreId, blendedScore,
+  queryByGenre, queryByTitle, queryByTitles, queryAwardTitles,
+  getSimilarSuggestions, formatTitle,
 } = require("./shared");
 
 exports.handler = async (event) => {
@@ -28,120 +29,78 @@ exports.handler = async (event) => {
     };
   }
 
-  // Step 1: Collect candidate titles
-  let allTitles = [];
-  const seenIds = new Set();
-  let originalTitle = null;
+  let results = [];
+  let totalFound = 0;
 
-  if (award) {
-    const titles = await discoverAwardWinners(award, providerIds);
-    for (const t of titles) {
-      if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
-    }
-  } else if (similarTo) {
-    // Check if the original title itself is available
-    try {
-      const { tmdbFetch, getWatchProviders } = require("./shared");
-      const searchData = await tmdbFetch(`/search/${mediaType}`, { query: similarTo, language: "en-US" });
-      const searchResults = searchData.results || [];
-      if (searchResults.length) {
-        const candidate = searchResults[0];
-        const providers = await getWatchProviders(candidate.id, mediaType);
-        const providerIdList = providers.map((p) => p.provider_id);
-        if (providerIds.some((pid) => providerIdList.includes(pid))) {
-          originalTitle = candidate;
-          seenIds.add(candidate.id);
-        }
+  try {
+    if (award) {
+      // ─── Award search: DB lookup ───────────────────────
+      const dbResults = await queryAwardTitles(award, providerIds);
+      totalFound = dbResults.length;
+      results = dbResults.map(formatTitle);
+
+    } else if (similarTo) {
+      // ─── Similar-to: Claude + DB lookup ────────────────
+      // Check if original title is in DB
+      let originalTitle = null;
+      const original = await queryByTitle(similarTo);
+      if (original && original.provider_ids.some((pid) => providerIds.includes(pid))) {
+        originalTitle = formatTitle(original);
       }
-    } catch {}
 
-    const titles = await discoverSimilar(similarTo, providerIds, mediaType);
-    for (const t of titles) {
-      if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
-    }
-  } else if (genre) {
-    const genreId = getGenreId(genre, mediaType);
-    if (!genreId) {
+      // Get Claude suggestions and match against DB
+      const suggestions = await getSimilarSuggestions(similarTo, providerIds, mediaType);
+      const dbResults = await queryByTitles(suggestions, providerIds, mediaType);
+      totalFound = dbResults.length + (originalTitle ? 1 : 0);
+      results = dbResults.map(formatTitle);
+
+      // Pin original at #1 if found
+      if (originalTitle) {
+        results = [originalTitle, ...results.filter((r) => r.imdb_id !== originalTitle.imdb_id)];
+      }
+
+    } else if (genre) {
+      // ─── Genre search: DB query ────────────────────────
+      const genreId = getGenreId(genre, mediaType);
+      if (!genreId) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ error: `Genre '${genre}' not found` }),
+        };
+      }
+      const dbResults = await queryByGenre(genreId, providerIds, mediaType);
+      totalFound = dbResults.length;
+      results = dbResults.map(formatTitle);
+
+    } else {
       return {
         statusCode: 400,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: `Genre '${genre}' not found` }),
+        body: JSON.stringify({ error: "Enter a genre, movie title, or select an award" }),
       };
     }
-    const titles = await discoverTitles(genreId, providerIds, mediaType);
-    for (const t of titles) {
-      if (!seenIds.has(t.id)) { seenIds.add(t.id); allTitles.push(t); }
+
+    // Sort by blended score
+    results.sort((a, b) => blendedScore(b) - blendedScore(a));
+
+    // Reviews are pre-populated from DB — no Claude call needed
+    // Clean up plot field (not needed in response)
+    for (const item of results) {
+      delete item.plot;
     }
-  } else {
+
     return {
-      statusCode: 400,
+      statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Enter a genre, movie title, or select an award" }),
+      body: JSON.stringify({ results, total_found: totalFound }),
+    };
+  } catch (err) {
+    console.error("Recommend error:", err);
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "Internal error: " + err.message }),
     };
   }
-
-  // Step 2: Enrich all candidates in parallel
-  const enrichResults = await Promise.allSettled(allTitles.map((t) => enrichSingle(t, mediaType)));
-  let enriched = enrichResults
-    .filter((r) => r.status === "fulfilled" && r.value)
-    .map((r) => r.value);
-
-  // Step 3: Quality floor — keep if RT >= 60% OR IMDb >= 6.5 (or no RT: IMDb >= 6.0)
-  enriched = enriched.filter((e) => {
-    const rt = e.rt_score;
-    const imdb = parseFloat(e.imdb_rating) || 0;
-    if (rt === null) return imdb >= 6.0;
-    return rt >= 60 || imdb >= 6.5;
-  });
-
-  // Sort by blended score: RT (40%) + IMDb (40%) + TMDB (20%)
-  function blendedScore(x) {
-    const rt = x.rt_score; // 0-100 or null
-    const imdbRaw = parseFloat(x.imdb_rating);
-    const imdb = isNaN(imdbRaw) ? null : imdbRaw * 10;
-    const tmdb = (x.tmdb_score || 0) * 10;
-
-    const scores = [];
-    const weights = [];
-    if (rt !== null) { scores.push(rt); weights.push(0.4); }
-    if (imdb !== null) { scores.push(imdb); weights.push(0.4); }
-    if (tmdb > 0) { scores.push(tmdb); weights.push(0.2); }
-
-    if (!scores.length) return 0;
-    const totalW = weights.reduce((a, b) => a + b, 0);
-    return scores.reduce((sum, s, i) => sum + s * weights[i], 0) / totalW;
-  }
-  enriched.sort((a, b) => blendedScore(b) - blendedScore(a));
-
-  // If "similar to" and original title is available, pin it at #1
-  if (similarTo && originalTitle) {
-    const originalEnriched = await enrichSingle(originalTitle, mediaType);
-    if (originalEnriched) {
-      originalEnriched.is_original = true;
-      enriched = [originalEnriched, ...enriched.filter((e) => e.imdb_id !== originalEnriched.imdb_id)];
-    }
-  }
-
-  // Step 4: Batch Claude reviews for top 20 (single API call)
-  const top20 = enriched.slice(0, 20);
-  const reviews = await getBatchClaudeReviews(top20);
-  for (const item of top20) {
-    item.review_text = reviews[item.title] || null;
-    item.review_source = item.review_text ? "AI-generated review" : null;
-    delete item.plot;
-  }
-
-  // Keep remaining enriched results (without reviews yet) for "load more"
-  const remaining = enriched.slice(20);
-  for (const item of remaining) {
-    item.review_text = null;
-    item.review_source = null;
-    delete item.plot;
-  }
-
-  return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ results: enriched, total_found: allTitles.length }),
-  };
 };

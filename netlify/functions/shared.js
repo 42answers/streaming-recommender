@@ -1,4 +1,5 @@
 const fetch = require("node-fetch");
+const { createClient } = require("@supabase/supabase-js");
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
@@ -36,7 +37,6 @@ const TV_GENRES = {
 
 const AWARD_LISTS = {
   cannes: [
-    // Palme d'Or / Grand Prix (top prize)
     ["Anora", 2024], ["Anatomy of a Fall", 2023], ["Triangle of Sadness", 2022],
     ["Titane", 2021], ["Parasite", 2019], ["Shoplifters", 2018],
     ["The Square", 2017], ["I, Daniel Blake", 2016], ["Dheepan", 2015],
@@ -68,7 +68,6 @@ const AWARD_LISTS = {
     ["Friendly Persuasion", 1957], ["The Silent World", 1956], ["Marty", 1955],
     ["Gate of Hell", 1954], ["The Wages of Fear", 1953],
     ["Othello", 1952], ["Miss Julie", 1951], ["The Third Man", 1949],
-    // Grand Prix (second prize) 1990+
     ["All We Imagine as Light", 2024], ["The Zone of Interest", 2023],
     ["Close", 2022], ["A Hero", 2021], ["Atlantics", 2019],
     ["BlacKkKlansman", 2018], ["BPM (Beats per Minute)", 2017],
@@ -79,13 +78,11 @@ const AWARD_LISTS = {
     ["Flanders", 2006], ["Broken Flowers", 2005], ["Old Boy", 2004],
     ["Distant", 2003], ["The Man Without a Past", 2002], ["The Piano Teacher", 2001],
     ["Songs from the Second Floor", 2000],
-    // Grand Prix (second prize) pre-1990
     ["Too Beautiful for You", 1989], ["A World Apart", 1988],
     ["Repentance", 1987], ["The Sacrifice", 1986], ["Birdy", 1985],
     ["The Night of the Shooting Stars", 1982],
     ["Mon Oncle d'Amérique", 1980],
     ["Investigation of a Citizen Above Suspicion", 1970],
-    // Caméra d'Or
     ["Armand", 2024], ["War Pony", 2022], ["Murina", 2021],
     ["Our Mothers", 2019], ["Girl", 2018], ["Jeune Femme", 2017],
     ["Divines", 2016], ["La Tierra y la Sombra", 2015], ["Party Girl", 2014],
@@ -96,7 +93,6 @@ const AWARD_LISTS = {
     ["Alambrista!", 1978],
   ],
   oscar: [
-    // Best Picture 1990-2024
     ["Anora", 2024], ["Oppenheimer", 2023], ["Everything Everywhere All at Once", 2022],
     ["CODA", 2021], ["Nomadland", 2020], ["Parasite", 2019],
     ["Green Book", 2018], ["The Shape of Water", 2017], ["Moonlight", 2016],
@@ -112,7 +108,6 @@ const AWARD_LISTS = {
     ["Braveheart", 1995], ["Forrest Gump", 1994], ["Schindler's List", 1993],
     ["Unforgiven", 1992], ["The Silence of the Lambs", 1991],
     ["Dances with Wolves", 1990],
-    // Best Picture 1940-1989
     ["Driving Miss Daisy", 1989], ["Rain Man", 1988], ["The Last Emperor", 1987],
     ["Platoon", 1986], ["Out of Africa", 1985], ["Amadeus", 1984],
     ["Terms of Endearment", 1983], ["Gandhi", 1982], ["Chariots of Fire", 1981],
@@ -131,16 +126,13 @@ const AWARD_LISTS = {
     ["The Best Years of Our Lives", 1946], ["The Lost Weekend", 1945],
     ["Going My Way", 1944], ["Casablanca", 1943], ["Mrs. Miniver", 1942],
     ["How Green Was My Valley", 1941], ["Rebecca", 1940],
-    // Best Director (when different from Best Picture) 1990+
     ["The Brutalist", 2024], ["Roma", 2018], ["La La Land", 2016],
     ["The Revenant", 2015], ["Gravity", 2013], ["Life of Pi", 2012],
     ["Traffic", 2000], ["Saving Private Ryan", 1998],
-    // Best Director 1940-1989
     ["Born on the Fourth of July", 1989], ["Reds", 1981],
     ["Cabaret", 1972], ["The Graduate", 1967],
     ["The Treasure of the Sierra Madre", 1948], ["A Place in the Sun", 1951],
     ["The Quiet Man", 1952], ["Giant", 1956],
-    // Best Original Screenplay 1990+
     ["Anatomy of a Fall", 2023], ["Belfast", 2021],
     ["Promising Young Woman", 2020], ["Get Out", 2017],
     ["Manchester by the Sea", 2016], ["Her", 2013],
@@ -149,7 +141,6 @@ const AWARD_LISTS = {
     ["Eternal Sunshine of the Spotless Mind", 2004], ["Lost in Translation", 2003],
     ["Talk to Her", 2002], ["Gosford Park", 2001], ["Almost Famous", 2000],
     ["Good Will Hunting", 1997], ["Fargo", 1996], ["The Usual Suspects", 1995],
-    // Best Original Screenplay 1940-1989
     ["Dead Poets Society", 1989], ["Hannah and Her Sisters", 1986],
     ["Witness", 1985], ["Places in the Heart", 1984], ["Tender Mercies", 1983],
     ["Chinatown", 1974], ["Network", 1976], ["Dog Day Afternoon", 1975],
@@ -158,13 +149,11 @@ const AWARD_LISTS = {
     ["Guess Who's Coming to Dinner", 1967], ["Divorce Italian Style", 1962],
     ["Splendor in the Grass", 1961], ["The Apartment", 1960],
     ["Citizen Kane", 1941], ["The Great McGinty", 1940],
-    // Best Adapted Screenplay 1990+
     ["Conclave", 2024], ["American Fiction", 2023],
     ["Women Talking", 2022], ["The Father", 2020],
     ["Jojo Rabbit", 2019], ["BlacKkKlansman", 2018],
     ["Call Me by Your Name", 2017], ["The Big Short", 2015],
     ["The Imitation Game", 2014],
-    // Best Adapted Screenplay 1940-1989
     ["Dangerous Liaisons", 1988], ["The Last Emperor", 1987], ["A Room with a View", 1986],
     ["Out of Africa", 1985], ["Amadeus", 1984], ["Terms of Endearment", 1983],
     ["Missing", 1982], ["On Golden Pond", 1981], ["Ordinary People", 1980],
@@ -185,7 +174,6 @@ const AWARD_LISTS = {
     ["The Best Years of Our Lives", 1946], ["The Lost Weekend", 1945],
     ["Going My Way", 1944], ["Casablanca", 1943], ["Mrs. Miniver", 1942],
     ["How Green Was My Valley", 1941], ["The Philadelphia Story", 1940],
-    // Best Animated Feature (2001+)
     ["Flow", 2024], ["The Boy and the Heron", 2023],
     ["Guillermo del Toro's Pinocchio", 2022], ["Encanto", 2021],
     ["Soul", 2020], ["Toy Story 4", 2019], ["Spider-Man: Into the Spider-Verse", 2018],
@@ -196,7 +184,6 @@ const AWARD_LISTS = {
     ["Wallace & Gromit: The Curse of the Were-Rabbit", 2005],
     ["The Incredibles", 2004], ["Finding Nemo", 2003],
     ["Spirited Away", 2002], ["Shrek", 2001],
-    // Best Documentary Feature 2000+
     ["No Other Land", 2024], ["20 Days in Mariupol", 2023],
     ["Navalny", 2022], ["Summer of Soul", 2021],
     ["My Octopus Teacher", 2020], ["American Factory", 2019],
@@ -207,7 +194,6 @@ const AWARD_LISTS = {
     ["Taxi to the Dark Side", 2007], ["An Inconvenient Truth", 2006],
     ["March of the Penguins", 2005], ["Born into Brothels", 2004],
     ["Fog of War", 2003], ["Bowling for Columbine", 2002],
-    // Best Documentary Feature 1940-1999
     ["Common Threads: Stories from the Quilt", 1989],
     ["Hotel Terminus: The Life and Times of Klaus Barbie", 1988],
     ["The Times of Harvey Milk", 1984], ["Hearts and Minds", 1974],
@@ -216,7 +202,6 @@ const AWARD_LISTS = {
     ["Kon-Tiki", 1951], ["The Living Desert", 1953],
   ],
   venice_golden_lion: [
-    // 2000-2024
     ["The Room Next Door", 2024], ["Poor Things", 2023], ["All the Beauty and the Bloodshed", 2022],
     ["Happening", 2021], ["Nomadland", 2020], ["Joker", 2019],
     ["Roma", 2018], ["The Shape of Water", 2017], ["The Woman Who Left", 2016],
@@ -226,20 +211,17 @@ const AWARD_LISTS = {
     ["Lust, Caution", 2007], ["Still Life", 2006], ["Brokeback Mountain", 2005],
     ["Vera Drake", 2004], ["The Return", 2003], ["The Magdalene Sisters", 2002],
     ["Monsoon Wedding", 2001], ["The Circle", 2000],
-    // 1990-1999
     ["Not One Less", 1999], ["The Way We Laughed", 1998], ["Hana-bi", 1997],
     ["Michael Collins", 1996], ["Cyclo", 1995],
     ["Vive L'Amour", 1994], ["Before the Rain", 1994],
     ["Short Cuts", 1993], ["Three Colours: Blue", 1993],
     ["The Story of Qiu Ju", 1992], ["Urga", 1991],
     ["Rosencrantz and Guildenstern Are Dead", 1990],
-    // 1980-1989
     ["A City of Sadness", 1989], ["The Legend of the Holy Drinker", 1988],
     ["Au Revoir les Enfants", 1987], ["The Green Ray", 1986],
     ["Vagabond", 1985], ["Year of the Quiet Sun", 1984],
     ["First Name: Carmen", 1983], ["The State of Things", 1982],
     ["The German Sisters", 1981], ["Atlantic City", 1980], ["Gloria", 1980],
-    // 1949-1968 (no Golden Lion 1969-1979)
     ["The Battle of Algiers", 1966], ["Belle de Jour", 1967],
     ["Red Desert", 1964], ["Hands over the City", 1963],
     ["Last Year at Marienbad", 1961], ["Le Passage du Rhin", 1960],
@@ -249,7 +231,6 @@ const AWARD_LISTS = {
     ["Justice Is Done", 1950], ["Manon", 1949],
   ],
   berlin_golden_bear: [
-    // 2000-2025
     ["Dreams", 2025], ["Dahomey", 2024], ["On the Adamant", 2023],
     ["Alcarràs", 2022], ["Bad Luck Banging or Loony Porn", 2021],
     ["There Is No Evil", 2020], ["Synonyms", 2019],
@@ -261,19 +242,16 @@ const AWARD_LISTS = {
     ["U-Carmen e-Khayelitsha", 2005], ["Head-On", 2004],
     ["In This World", 2003], ["Spirited Away", 2002],
     ["Intimacy", 2001], ["Magnolia", 2000],
-    // 1990-1999
     ["The Thin Red Line", 1999], ["Central Station", 1998],
     ["The People vs. Larry Flynt", 1997], ["Sense and Sensibility", 1996],
     ["The Bait", 1995], ["In the Name of the Father", 1994],
     ["The Woman from the Lake of Scented Souls", 1993], ["The Wedding Banquet", 1993],
     ["Grand Canyon", 1992], ["House of Smiles", 1991],
     ["Music Box", 1990], ["Larks on a String", 1990],
-    // 1980-1989
     ["Rain Man", 1989], ["Red Sorghum", 1988], ["The Theme", 1987],
     ["Stammheim", 1986], ["Wetherby", 1985], ["Love Streams", 1984],
     ["Ascendancy", 1983], ["The Beehive", 1983], ["Veronika Voss", 1982],
     ["Deprisa, Deprisa", 1981], ["Heartland", 1980], ["Palermo or Wolfsburg", 1980],
-    // 1951-1979
     ["David", 1979], ["The Ascent", 1977],
     ["Buffalo Bill and the Indians", 1976], ["Adoption", 1975],
     ["The Apprenticeship of Duddy Kravitz", 1974], ["Distant Thunder", 1973],
@@ -294,93 +272,143 @@ const AWARD_OPTIONS = {
   berlin_golden_bear: "Berlin — Golden Bear",
 };
 
-async function tmdbFetch(path, params = {}) {
-  params.api_key = process.env.TMDB_API_KEY;
-  const qs = new URLSearchParams(params).toString();
-  const resp = await fetch(`${TMDB_BASE}${path}?${qs}`);
-  return resp.json();
+// ─── Supabase client ─────────────────────────────────────────
+function getSupabase() {
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 }
 
-async function omdbFetch(imdbId) {
-  const resp = await fetch(`http://www.omdbapi.com/?i=${imdbId}&apikey=${process.env.OMDB_API_KEY}`);
-  return resp.json();
-}
-
+// ─── Genre ID lookup ─────────────────────────────────────────
 function getGenreId(genreName, mediaType) {
   const genres = mediaType === "movie" ? TMDB_GENRES : TV_GENRES;
   const lower = genreName.toLowerCase();
   for (const [id, name] of Object.entries(genres)) {
-    if (name.toLowerCase().includes(lower)) return id;
+    if (name.toLowerCase().includes(lower)) return parseInt(id);
   }
   return null;
 }
 
-async function getWatchProviders(titleId, mediaType) {
-  const data = await tmdbFetch(`/${mediaType}/${titleId}/watch/providers`);
-  return (data.results?.NL?.flatrate) || [];
+// ─── Blended score calculation ───────────────────────────────
+function blendedScore(t) {
+  const rt = t.rt_score;
+  const imdb = t.imdb_rating ? parseFloat(t.imdb_rating) * 10 : null;
+  const tmdb = t.tmdb_vote_avg ? parseFloat(t.tmdb_vote_avg) * 10 : 0;
+
+  const scores = [];
+  const weights = [];
+  if (rt !== null && rt !== undefined) { scores.push(rt); weights.push(0.4); }
+  if (imdb !== null && !isNaN(imdb)) { scores.push(imdb); weights.push(0.4); }
+  if (tmdb > 0) { scores.push(tmdb); weights.push(0.2); }
+
+  if (!scores.length) return 0;
+  const totalW = weights.reduce((a, b) => a + b, 0);
+  return scores.reduce((sum, s, i) => sum + s * weights[i], 0) / totalW;
 }
 
-async function getImdbId(tmdbId, mediaType) {
-  const data = await tmdbFetch(`/${mediaType}/${tmdbId}/external_ids`);
-  return data.imdb_id || null;
+// ─── DB query: by genre ──────────────────────────────────────
+async function queryByGenre(genreId, providerIds, mediaType) {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("titles")
+    .select("*")
+    .eq("media_type", mediaType)
+    .contains("genre_ids", [genreId])
+    .overlaps("provider_ids", providerIds)
+    .order("tmdb_vote_avg", { ascending: false })
+    .limit(200);
+
+  if (error) { console.error("queryByGenre error:", error); return []; }
+  return data || [];
 }
 
-function getRtScore(omdbData) {
-  for (const r of (omdbData.Ratings || [])) {
-    if (r.Source === "Rotten Tomatoes") return parseInt(r.Value);
+// ─── DB query: by title (for similar-to matching) ────────────
+async function queryByTitle(titleName) {
+  const supabase = getSupabase();
+
+  // Try exact match first
+  let { data } = await supabase
+    .from("titles")
+    .select("*")
+    .ilike("title", titleName)
+    .limit(1);
+
+  if (data && data.length) return data[0];
+
+  // Try fuzzy match
+  ({ data } = await supabase
+    .from("titles")
+    .select("*")
+    .ilike("title", `%${titleName}%`)
+    .limit(1));
+
+  return data && data.length ? data[0] : null;
+}
+
+// ─── DB query: multiple titles by name (for Claude suggestions) ─
+async function queryByTitles(suggestions, providerIds, mediaType) {
+  const supabase = getSupabase();
+  const results = [];
+  const seenIds = new Set();
+
+  // Query each suggestion against the DB
+  for (const s of suggestions) {
+    // Try exact title + year match
+    let { data } = await supabase
+      .from("titles")
+      .select("*")
+      .eq("media_type", mediaType)
+      .ilike("title", s.title)
+      .overlaps("provider_ids", providerIds)
+      .limit(1);
+
+    if (!data || !data.length) {
+      // Try fuzzy match
+      ({ data } = await supabase
+        .from("titles")
+        .select("*")
+        .eq("media_type", mediaType)
+        .ilike("title", `%${s.title}%`)
+        .overlaps("provider_ids", providerIds)
+        .limit(1));
+    }
+
+    if (data && data.length && !seenIds.has(data[0].tmdb_id)) {
+      seenIds.add(data[0].tmdb_id);
+      results.push(data[0]);
+    }
   }
-  return null;
+
+  return results;
 }
 
-async function discoverTitles(genreId, providerIds, mediaType) {
-  const ANIMATION_GENRE_ID = 16;
-  const DOCUMENTARY_GENRE_ID = 99;
-  const baseParams = {
-    watch_region: "NL",
-    with_watch_providers: providerIds.join("|"),
-    with_genres: genreId,
-    sort_by: "vote_average.desc",
-    "vote_count.gte": mediaType === "movie" ? 100 : 50,
-    language: "en-US",
-  };
-  // Exclude animation and documentary unless specifically selected
-  const exclude = [];
-  if (String(genreId) !== String(ANIMATION_GENRE_ID)) exclude.push(ANIMATION_GENRE_ID);
-  if (String(genreId) !== String(DOCUMENTARY_GENRE_ID)) exclude.push(DOCUMENTARY_GENRE_ID);
-  if (exclude.length) baseParams.without_genres = exclude.join(",");
+// ─── DB query: award titles ──────────────────────────────────
+async function queryAwardTitles(awardKey, providerIds) {
+  const winners = AWARD_LISTS[awardKey] || [];
+  const supabase = getSupabase();
+  const results = [];
+  const seenIds = new Set();
 
-  const allResults = [];
-  for (let page = 1; page <= 5; page++) {
-    const data = await tmdbFetch(`/discover/${mediaType}`, { ...baseParams, page });
-    const results = data.results || [];
-    allResults.push(...results);
-    if (results.length < 20) break;
+  // Build OR conditions for all titles
+  for (const [titleName, year] of winners) {
+    const { data } = await supabase
+      .from("titles")
+      .select("*")
+      .ilike("title", titleName)
+      .eq("year", String(year))
+      .overlaps("provider_ids", providerIds)
+      .limit(1);
+
+    if (data && data.length && !seenIds.has(data[0].tmdb_id)) {
+      seenIds.add(data[0].tmdb_id);
+      results.push(data[0]);
+    }
   }
-  return allResults;
+
+  return results;
 }
 
-// Check a single Claude suggestion against TMDB + NL streaming (used in parallel)
-async function checkTitleOnTmdb(suggestion, providerIds, mediaType) {
-  try {
-    const data = await tmdbFetch(`/search/${mediaType}`, {
-      query: suggestion.title,
-      year: suggestion.year,
-      language: "en-US",
-    });
-    const results = data.results || [];
-    if (!results.length) return null;
-
-    const title = results[0];
-    const providers = await getWatchProviders(title.id, mediaType);
-    const providerIdList = providers.map((p) => p.provider_id);
-    if (!providerIds.some((pid) => providerIdList.includes(pid))) return null;
-    return title;
-  } catch {
-    return null;
-  }
-}
-
-async function discoverSimilar(movieTitle, providerIds, mediaType) {
+// ─── Claude: similar-to suggestions ──────────────────────────
+async function getSimilarSuggestions(movieTitle, providerIds, mediaType) {
   const Anthropic = require("@anthropic-ai/sdk");
   if (!process.env.ANTHROPIC_API_KEY) return [];
 
@@ -389,7 +417,7 @@ async function discoverSimilar(movieTitle, providerIds, mediaType) {
     .map((pid) => PROVIDER_NAMES[pid] || "")
     .filter(Boolean)
     .join(", ");
-  let suggestions;
+
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await client.messages.create({
@@ -414,157 +442,37 @@ async function discoverSimilar(movieTitle, providerIds, mediaType) {
     if (text.startsWith("```")) {
       text = text.split("\n").slice(1).join("\n").replace(/```\s*$/, "").trim();
     }
-    suggestions = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     return [];
   }
-
-  // Check all suggestions in parallel
-  const checks = suggestions.map((s) => checkTitleOnTmdb(s, providerIds, mediaType));
-  const settled = await Promise.allSettled(checks);
-
-  const results = [];
-  const seenIds = new Set();
-  for (const r of settled) {
-    if (r.status === "fulfilled" && r.value) {
-      const title = r.value;
-      if (!seenIds.has(title.id)) {
-        seenIds.add(title.id);
-        results.push(title);
-      }
-    }
-  }
-  return results;
 }
 
-// Check a single award winner against TMDB + NL streaming (used in parallel)
-async function checkAwardTitle(titleName, year, providerIds) {
-  try {
-    const data = await tmdbFetch("/search/movie", {
-      query: titleName,
-      year,
-      language: "en-US",
-    });
-    const results = data.results || [];
-    if (!results.length) return null;
-
-    const movie = results[0];
-    const providers = await getWatchProviders(movie.id, "movie");
-    const providerIdList = providers.map((p) => p.provider_id);
-    if (!providerIds.some((pid) => providerIdList.includes(pid))) return null;
-    return movie;
-  } catch {
-    return null;
-  }
-}
-
-async function discoverAwardWinners(awardKey, providerIds) {
-  const winners = AWARD_LISTS[awardKey] || [];
-
-  // Check all winners in parallel
-  const checks = winners.map(([name, year]) => checkAwardTitle(name, year, providerIds));
-  const settled = await Promise.allSettled(checks);
-
-  const results = [];
-  const seenIds = new Set();
-  for (const r of settled) {
-    if (r.status === "fulfilled" && r.value) {
-      const movie = r.value;
-      if (!seenIds.has(movie.id)) {
-        seenIds.add(movie.id);
-        results.push(movie);
-      }
-    }
-  }
-  return results;
-}
-
-// Enrich a single title with IMDb/OMDb data (used in parallel)
-async function enrichSingle(title, mediaType) {
-  try {
-    const imdbId = await getImdbId(title.id, mediaType);
-    if (!imdbId) return null;
-
-    const omdb = await omdbFetch(imdbId);
-    if (omdb.Response === "False") return null;
-
-    const name = title.title || title.name || "Unknown";
-    const year = (title.release_date || title.first_air_date || "").slice(0, 4);
-
-    const providers = await getWatchProviders(title.id, mediaType);
-    const availableOn = providers
-      .filter((p) => p.provider_id in PROVIDER_NAMES)
-      .map((p) => PROVIDER_NAMES[p.provider_id]);
-
-    return {
-      title: name,
-      year,
-      poster: `https://image.tmdb.org/t/p/w300${title.poster_path || ""}`,
-      overview: title.overview || "",
-      rt_score: getRtScore(omdb),
-      imdb_rating: omdb.imdbRating || "N/A",
-      tmdb_score: title.vote_average || 0,
-      imdb_id: imdbId,
-      genres: omdb.Genre || "",
-      awards: omdb.Awards || "",
-      language: omdb.Language || "",
-      plot: omdb.Plot || "",
-      available_on: availableOn,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Batch Claude reviews: single API call for all titles
-async function getBatchClaudeReviews(titles) {
-  const Anthropic = require("@anthropic-ai/sdk");
-  if (!process.env.ANTHROPIC_API_KEY || !titles.length) return {};
-
-  const titlesText = titles
-    .map((t, i) => `${i + 1}. ${t.title} (${t.year}): ${(t.plot || "").slice(0, 100)}`)
-    .join("\n");
-
-  try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
-      messages: [{
-        role: "user",
-        content:
-          `Write a 1-sentence review (max 12 words) for each film/series. ` +
-          `Punchy and specific. No spoilers.\n\n` +
-          `${titlesText}\n\n` +
-          `Return ONLY a JSON object mapping the number to the review. ` +
-          `Example: {"1": "A sharp heist that never lets up.", "2": "Devastating portrait of grief."}\n` +
-          `No explanation, no markdown, just JSON.`,
-      }],
-    });
-    let text = message.content[0].text.trim();
-    if (text.startsWith("```")) {
-      text = text.split("\n").slice(1).join("\n").replace(/```\s*$/, "").trim();
-    }
-    const reviews = JSON.parse(text);
-
-    // Map back to title names
-    const result = {};
-    titles.forEach((t, i) => {
-      const key = String(i + 1);
-      if (key in reviews) {
-        result[t.title] = reviews[key];
-      }
-    });
-    return result;
-  } catch {
-    return {};
-  }
+// ─── Format DB row to API response ──────────────────────────
+function formatTitle(row) {
+  return {
+    title: row.title,
+    year: row.year,
+    poster: row.poster_url || "",
+    overview: row.overview || "",
+    rt_score: row.rt_score,
+    imdb_rating: row.imdb_rating ? String(row.imdb_rating) : "N/A",
+    tmdb_score: row.tmdb_vote_avg ? parseFloat(row.tmdb_vote_avg) : 0,
+    imdb_id: row.imdb_id,
+    genres: row.genre_names || "",
+    awards: row.awards || "",
+    language: row.language || "",
+    plot: row.plot || "",
+    available_on: row.provider_names || [],
+    review_text: row.claude_review || null,
+    review_source: row.claude_review ? "AI-generated review" : null,
+  };
 }
 
 module.exports = {
   PROVIDER_IDS, PROVIDER_NAMES, TMDB_GENRES, TV_GENRES,
-  AWARD_OPTIONS,
-  tmdbFetch, omdbFetch, getGenreId, getWatchProviders, getImdbId, getRtScore,
-  discoverTitles, discoverSimilar, discoverAwardWinners,
-  enrichSingle, getBatchClaudeReviews,
+  AWARD_LISTS, AWARD_OPTIONS,
+  getSupabase, getGenreId, blendedScore,
+  queryByGenre, queryByTitle, queryByTitles, queryAwardTitles,
+  getSimilarSuggestions, formatTitle,
 };
