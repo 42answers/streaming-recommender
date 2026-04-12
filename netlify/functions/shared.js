@@ -288,10 +288,13 @@ function getGenreId(genreName, mediaType) {
 }
 
 // ─── Blended score calculation ───────────────────────────────
-function blendedScore(t) {
+// genreId (optional): boost titles where this genre is primary (first in list)
+function blendedScore(t, genreId) {
   const rt = t.rt_score;
-  const imdb = t.imdb_rating ? parseFloat(t.imdb_rating) * 10 : null;
-  const tmdb = t.tmdb_vote_avg ? parseFloat(t.tmdb_vote_avg) * 10 : 0;
+  const imdbVal = t.imdb_rating ? parseFloat(t.imdb_rating) : null;
+  const imdb = imdbVal && !isNaN(imdbVal) ? imdbVal * 10 : null;
+  const tmdbVal = t.tmdb_vote_avg || t.tmdb_score;
+  const tmdb = tmdbVal ? parseFloat(tmdbVal) * 10 : 0;
 
   const scores = [];
   const weights = [];
@@ -301,7 +304,17 @@ function blendedScore(t) {
 
   if (!scores.length) return 0;
   const totalW = weights.reduce((a, b) => a + b, 0);
-  return scores.reduce((sum, s, i) => sum + s * weights[i], 0) / totalW;
+  let score = scores.reduce((sum, s, i) => sum + s * weights[i], 0) / totalW;
+
+  // Genre relevance boost: +15 if primary genre, +5 if second genre
+  if (genreId && t.genre_ids) {
+    const pos = t.genre_ids.indexOf(genreId);
+    if (pos === 0) score += 15;       // Primary genre — strong boost
+    else if (pos === 1) score += 5;   // Secondary genre — small boost
+    // pos >= 2: no boost (genre is tertiary/minor)
+  }
+
+  return score;
 }
 
 // ─── DB query: by genre ──────────────────────────────────────
@@ -457,8 +470,9 @@ function formatTitle(row) {
     overview: row.overview || "",
     rt_score: row.rt_score,
     imdb_rating: row.imdb_rating ? String(row.imdb_rating) : "N/A",
-    tmdb_score: row.tmdb_vote_avg ? parseFloat(row.tmdb_vote_avg) : 0,
+    tmdb_vote_avg: row.tmdb_vote_avg ? parseFloat(row.tmdb_vote_avg) : 0,
     imdb_id: row.imdb_id,
+    genre_ids: row.genre_ids || [],
     genres: row.genre_names || "",
     awards: row.awards || "",
     language: row.language || "",

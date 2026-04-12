@@ -81,13 +81,15 @@ exports.handler = async (event) => {
       };
     }
 
-    // Sort by blended score
-    results.sort((a, b) => blendedScore(b) - blendedScore(a));
+    // Sort by blended score (with genre boost for genre searches)
+    const sortGenreId = genre ? getGenreId(genre, mediaType) : null;
+    results.sort((a, b) => blendedScore(b, sortGenreId) - blendedScore(a, sortGenreId));
 
     // Reviews are pre-populated from DB — no Claude call needed
-    // Clean up plot field (not needed in response)
+    // Clean up internal fields not needed in response
     for (const item of results) {
       delete item.plot;
+      delete item.genre_ids;
     }
 
     return {
